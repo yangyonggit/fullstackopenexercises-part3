@@ -1,7 +1,35 @@
 const express = require('express')
+const morgan = require('morgan')
+
+
 const app = express()
 
 app.use(express.json())
+
+// Define a custom format that includes the body for POST requests only
+morgan.format('custom', (tokens, req, res) => {
+    // Common 'tiny' format tokens
+    const tinyFormat = [
+      tokens.method(req, res),
+      tokens.url(req, res),
+      tokens.status(req, res),
+      tokens.res(req, res, 'content-length'), '-',
+      tokens['response-time'](req, res), 'ms'
+    ].join(' ');
+  
+    // Append the body for POST requests only
+    if (req.method === 'POST' && Object.keys(req.body).length > 0) {
+      return `${tinyFormat} ${JSON.stringify(req.body)}`;
+    }
+  
+    // Don't append body for other request types or empty bodies
+    return tinyFormat;
+  });
+  
+  // Use the custom format in Morgan middleware
+  app.use(morgan('custom'));
+
+
 
 let persons = [
     {   
@@ -46,7 +74,9 @@ app.get('/api/persons/:id', (request, response) => {
     if (person) {
       response.json(person)
     } else {
-      response.status(404).end()
+      response.status(400).json({
+        error: 'person not found'
+      })
     }
 })
 
@@ -58,8 +88,7 @@ app.delete('/api/persons/:id', (request, response) => {
   })
 
 app.post('/api/persons', (request, response) => {
-    const body = request.body
-    console.log('/api/persons recived: ', body)
+    const body = request.body    
     
     if (!body.name) {
       return response.status(400).json({ 
@@ -89,6 +118,12 @@ app.post('/api/persons', (request, response) => {
   
     response.json(person)
   })
+
+const unknownEndpoint = (request, response) => {
+response.status(404).send({ error: 'unknown endpoint' })
+}
+
+app.use(unknownEndpoint)
 
 const PORT = 3001
 app.listen(PORT, () => {
