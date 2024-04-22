@@ -62,7 +62,17 @@ let persons = [
     //   }
 ]
 
-const generateId = () => Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message)
+
+  if (error.name === 'CastError') {
+    return response.status(400).send({ error: 'malformatted id' })
+  } 
+
+  next(error)
+}
+
+
 
 
 app.get('/info', (request, response) => {
@@ -80,20 +90,19 @@ app.get('/api/persons', (request, response) => {
     })
 })
 
-app.get('/api/persons/:id', (request, response) => {
-    const id = Number(request.params.id)
-    const person = persons.find(person => person.id === id)
-  
-    if (person) {
-      response.json(person)
-    } else {
-      response.status(400).json({
-        error: 'person not found'
-      })
-    }
+app.get('/api/persons/:id', (request, response,next) => {
+    const id = request.params.id
+
+    PersonDB.findById(id).then(result => {
+      if (result) {
+        response.json(result)
+      } else {
+        response.status(404).end()
+      }
+    }).catch(error => next(error));
 })
 
-app.delete('/api/persons/:id', (request, response) => {
+app.delete('/api/persons/:id', (request, response, next) => {
     const id = request.params.id
     PersonDB.findByIdAndDelete(id).then(result => {
       if (result) {
@@ -105,13 +114,9 @@ app.delete('/api/persons/:id', (request, response) => {
         console.log('error deleting:',result)
         response.status(404).send({ error: 'Person not found' });
       }
-    }).catch(error => {
-      console.error(error);
-      response.status(500).send({ error: 'Server error' });
+    }).catch(error => next(error));
   });
-
-
-  })
+ 
 
 app.post('/api/persons', (request, response) => {
     const body = request.body    
@@ -144,8 +149,30 @@ app.post('/api/persons', (request, response) => {
       console.log('person saved:',result)
       persons = persons.concat(result)
       response.json(result) 
-    })    
+    }).catch(error => {
+      console.log('error saving person:',error)
+      response.status(500).send({ error: 'Error saving person' });
+    })
   })
+
+app.put('/api/persons/:id', (request, response, next) => {
+  const body = request.body
+
+  const person = {
+    name: body.name,
+    number: body.number,      
+  }
+  console.log('try update person id:', request.params.id)
+  PersonDB.findByIdAndUpdate(request.params.id, person, { new: true })
+    .then(updatedNote => {
+      response.json(updatedNote)
+      persons = persons.map(person => person.id !== updatedNote.id ? person : updatedNote)
+    })
+    .catch(error => {
+      console.log('error updating person:',error)
+      next(error)
+    })
+})
 
 const unknownEndpoint = (request, response) => {
 response.status(404).send({ error: 'unknown endpoint' })
@@ -154,6 +181,9 @@ response.status(404).send({ error: 'unknown endpoint' })
 app.use(unknownEndpoint)
 
 const PORT = process.env.PORT || 3001
+
+// this has to be the last loaded middleware, also all the routes should be registered before this!
+app.use(errorHandler)
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
