@@ -1,5 +1,7 @@
 const mongoose = require('mongoose')
 
+let personSchema = null
+
 
 const connectToMongo= (password) =>{
   const url =  
@@ -7,7 +9,12 @@ const connectToMongo= (password) =>{
 
   mongoose.set('strictQuery',false)
 
-  mongoose.connect(url)
+  return mongoose.connect(url).then(result => {
+    console.log('Connected to MongoDB')
+    personSchema = setupSchema()
+  }).catch((error) => {
+    console.log('error connecting to MongoDB:', error.message)
+  })
 }
 
 const setupSchema = () => {
@@ -15,12 +22,12 @@ const setupSchema = () => {
     name: String,
     number: String,
   })
-
+  console.log('Schema setup')
   const person = mongoose.model('Persons', personSchema)
   return person
 }
 
-const addPerson = (personSchema,person,number) => {
+const addPerson = (person,number) => {
   const personData = new personSchema({
     name: person,
     number: number,
@@ -31,7 +38,7 @@ const addPerson = (personSchema,person,number) => {
   })
 }
 
-const listPersons =(personSchema) =>{
+const listPersons =() =>{
   console.log('phonebook:')
   personSchema.find({}).then(result => {
     result.forEach(person => {
@@ -41,24 +48,38 @@ const listPersons =(personSchema) =>{
   })
 }
 
-
-if (process.argv.length<3) {
-  console.log('give password as argument')
-  process.exit(1)
-}else if (process.argv.length === 3){
-  const password = process.argv[2]
-  connectToMongo(password)
-  const personSchema = setupSchema()
-  listPersons(personSchema)
-}else if (process.argv.length === 5){
-  const password = process.argv[2]
-  const person = process.argv[3]
-  const number = process.argv[4]
-  connectToMongo(password)
-  const personSchema = setupSchema()
-  addPerson(personSchema,person,number)
-}else{
-  console.log('Invalid number of arguments')
-  process.exit(1)
+const getAllPersons = () =>{
+  return personSchema.find({})
 }
 
+const colseConnection = () =>{
+  mongoose.connection.close()
+}
+
+const testDB = () =>{
+  if (process.argv.length<3) {
+    console.log('give password as argument')
+    process.exit(1)
+  }else if (process.argv.length === 3){
+    const password = process.argv[2]
+    connectToMongo(password).then(result => {      
+      listPersons() 
+    })
+   
+  }else if (process.argv.length === 5){
+    const password = process.argv[2]
+    const person = process.argv[3]
+    const number = process.argv[4]
+    connectToMongo(password).then(result => {      
+      addPerson(person,number)
+    })    
+  }else{
+    console.log('Invalid number of arguments')
+    process.exit(1)
+  }  
+}
+
+if (process.argv.length > 1 && process.argv[1].includes('mongo.js'))
+  testDB()
+
+// module.exports = {connectToMongo,setupSchema,addPerson,listPersons,getAllPersons,colseConnection}
